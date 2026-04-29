@@ -8,6 +8,11 @@ import { MasonryFeed } from "./components/MasonryFeed";
 import { NoteDetailModal } from "./components/NoteDetailModal";
 import { LoginModal } from "./components/LoginModal";
 import { NOTES, getNoteById } from "./data/notes";
+import type { Loc } from "./lib/i18n";
+
+function locMatches(l: Loc, q: string): boolean {
+  return l.zh.toLowerCase().includes(q) || l.mn.toLowerCase().includes(q);
+}
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState("discover");
@@ -25,9 +30,9 @@ export default function Home() {
       const q = query.trim().toLowerCase();
       list = list.filter(
         (n) =>
-          n.title.toLowerCase().includes(q) ||
-          n.tags.some((t) => t.toLowerCase().includes(q)) ||
-          n.author.name.toLowerCase().includes(q),
+          locMatches(n.title, q) ||
+          n.tags.some((t) => locMatches(t, q)) ||
+          locMatches(n.author.name, q),
       );
     }
     return list;
