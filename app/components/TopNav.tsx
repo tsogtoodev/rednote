@@ -1,28 +1,43 @@
 "use client";
 
-import { Search, Bell, Pencil, Check, Globe } from "lucide-react";
+import { Search, Bell, Pencil, Check, Globe, LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LANGS, useLang } from "../lib/i18n";
+import { avatarUrl } from "../lib/img";
+import type { SessionUser } from "@/lib/types";
 
 type Props = {
   query: string;
   onQueryChange: (v: string) => void;
   onLoginClick: () => void;
+  user: SessionUser | null;
+  onLogout: () => void;
 };
 
-export function TopNav({ query, onQueryChange, onLoginClick }: Props) {
-  const { t, lang, setLang } = useLang();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+export function TopNav({
+  query,
+  onQueryChange,
+  onLoginClick,
+  user,
+  onLogout,
+}: Props) {
+  const { t, lang, loc, setLang } = useLang();
+  const [langOpen, setLangOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const langRef = useRef<HTMLDivElement | null>(null);
+  const userRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!menuOpen) return;
     const onClick = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+      const target = e.target as Node;
+      if (langOpen && !langRef.current?.contains(target)) setLangOpen(false);
+      if (userOpen && !userRef.current?.contains(target)) setUserOpen(false);
     };
-    window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
-  }, [menuOpen]);
+    if (langOpen || userOpen) {
+      window.addEventListener("mousedown", onClick);
+      return () => window.removeEventListener("mousedown", onClick);
+    }
+  }, [langOpen, userOpen]);
 
   return (
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-white/90 backdrop-blur-md">
@@ -78,9 +93,9 @@ export function TopNav({ query, onQueryChange, onLoginClick }: Props) {
             <Bell className="h-5 w-5 text-muted-foreground" />
           </button>
 
-          <div className="relative" ref={menuRef}>
+          <div className="relative" ref={langRef}>
             <button
-              onClick={() => setMenuOpen((v) => !v)}
+              onClick={() => setLangOpen((v) => !v)}
               aria-label="Language"
               className="flex h-10 items-center gap-1 rounded-full px-3 text-sm text-muted-foreground hover:bg-surface"
             >
@@ -89,14 +104,14 @@ export function TopNav({ query, onQueryChange, onLoginClick }: Props) {
                 {LANGS.find((l) => l.code === lang)?.native}
               </span>
             </button>
-            {menuOpen && (
+            {langOpen && (
               <div className="absolute right-0 top-full z-50 mt-2 w-36 overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lg animate-fade-in">
                 {LANGS.map((l) => (
                   <button
                     key={l.code}
                     onClick={() => {
                       setLang(l.code);
-                      setMenuOpen(false);
+                      setLangOpen(false);
                     }}
                     className="flex w-full items-center justify-between px-3 py-2 text-sm text-foreground hover:bg-surface"
                   >
@@ -110,12 +125,44 @@ export function TopNav({ query, onQueryChange, onLoginClick }: Props) {
             )}
           </div>
 
-          <button
-            onClick={onLoginClick}
-            className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-white transition hover:bg-brand-hover"
-          >
-            {t.login}
-          </button>
+          {user ? (
+            <div className="relative" ref={userRef}>
+              <button
+                onClick={() => setUserOpen((v) => !v)}
+                className="flex h-10 items-center gap-2 rounded-full bg-surface pl-1 pr-3 text-sm hover:bg-black/10"
+              >
+                <img
+                  src={avatarUrl(user.avatarSeed, 40)}
+                  alt={loc(user.displayName)}
+                  className="h-8 w-8 rounded-full bg-surface object-cover"
+                />
+                <span className="hidden max-w-[120px] truncate text-foreground sm:inline">
+                  {loc(user.displayName)}
+                </span>
+              </button>
+              {userOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-44 overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lg animate-fade-in">
+                  <button
+                    onClick={() => {
+                      onLogout();
+                      setUserOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {lang === "mn" ? "Гарах" : "退出登录"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={onLoginClick}
+              className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-white transition hover:bg-brand-hover"
+            >
+              {t.login}
+            </button>
+          )}
         </nav>
       </div>
     </header>

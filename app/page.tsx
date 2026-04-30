@@ -1,44 +1,94 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TopNav } from "./components/TopNav";
 import { Sidebar } from "./components/Sidebar";
 import { CategoryPills } from "./components/CategoryPills";
 import { MasonryFeed } from "./components/MasonryFeed";
 import { NoteDetailModal } from "./components/NoteDetailModal";
 import { LoginModal } from "./components/LoginModal";
-import { NOTES, getNoteById } from "./data/notes";
-import type { Loc } from "./lib/i18n";
-
-function locMatches(l: Loc, q: string): boolean {
-  return l.zh.toLowerCase().includes(q) || l.mn.toLowerCase().includes(q);
-}
+import {
+  fetchMe,
+  getNote,
+  listNotes,
+  logout as logoutApi,
+} from "@/lib/api";
+import type { Note, NoteListItem, SessionUser } from "@/lib/types";
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState("discover");
   const [activeCategory, setActiveCategory] = useState("all");
   const [query, setQuery] = useState("");
-  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [notes, setNotes] = useState<NoteListItem[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [openNote, setOpenNote] = useState<Note | null>(null);
+  const [openLoading, setOpenLoading] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const lastFeedReq = useRef(0);
 
-  const filtered = useMemo(() => {
-    let list = NOTES;
-    if (activeCategory !== "all") {
-      list = list.filter((n) => n.category === activeCategory);
-    }
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      list = list.filter(
-        (n) =>
-          locMatches(n.title, q) ||
-          n.tags.some((t) => locMatches(t, q)) ||
-          locMatches(n.author.name, q),
-      );
-    }
-    return list;
-  }, [activeCategory, query]);
+  // Bootstrap session
+  useEffect(() => {
+    fetchMe()
+      .then(({ user }) => setUser(user))
+      .catch(() => {});
+  }, []);
 
-  const openNote = openNoteId ? getNoteById(openNoteId) ?? null : null;
+  // Debounce search
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  // Load feed
+  useEffect(() => {
+    const reqId = ++lastFeedReq.current;
+    setFeedLoading(true);
+    const ctrl = new AbortController();
+    listNotes({
+      category: activeCategory,
+      q: debouncedQuery || undefined,
+      signal: ctrl.signal,
+    })
+      .then((data) => {
+        if (reqId !== lastFeedReq.current) return;
+        setNotes(data.notes);
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") console.error(err);
+      })
+      .finally(() => {
+        if (reqId === lastFeedReq.current) setFeedLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [activeCategory, debouncedQuery]);
+
+  // Load detail
+  useEffect(() => {
+    if (!openId) {
+      setOpenNote(null);
+      return;
+    }
+    setOpenLoading(true);
+    getNote(openId)
+      .then((n) => setOpenNote(n))
+      .catch((err) => {
+        console.error(err);
+        setOpenId(null);
+      })
+      .finally(() => setOpenLoading(false));
+  }, [openId]);
+
+  const onLogout = async () => {
+    try {
+      await logoutApi();
+    } catch (e) {
+      console.error(e);
+    }
+    setUser(null);
+  };
 
   return (
     <>
@@ -46,6 +96,8 @@ export default function Home() {
         query={query}
         onQueryChange={setQuery}
         onLoginClick={() => setLoginOpen(true)}
+        user={user}
+        onLogout={onLogout}
       />
 
       <div className="mx-auto flex max-w-[1480px]">
@@ -56,12 +108,27 @@ export default function Home() {
             active={activeCategory}
             onSelect={setActiveCategory}
           />
-          <MasonryFeed notes={filtered} onOpen={setOpenNoteId} />
+          <MasonryFeed
+            notes={notes}
+            onOpen={setOpenId}
+            loading={feedLoading}
+          />
         </main>
       </div>
 
-      <NoteDetailModal note={openNote} onClose={() => setOpenNoteId(null)} />
-      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <NoteDetailModal
+        note={openNote}
+        loading={openLoading}
+        user={user}
+        onClose={() => setOpenId(null)}
+        onRequireLogin={() => setLoginOpen(true)}
+        onNoteUpdated={(n) => setOpenNote(n)}
+      />
+      <LoginModal
+        open={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        onLoggedIn={(u) => setUser(u)}
+      />
     </>
   );
 }

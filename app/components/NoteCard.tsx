@@ -1,13 +1,13 @@
 "use client";
 
 import { Heart } from "lucide-react";
-import type { Note } from "../data/notes";
+import type { NoteListItem } from "@/lib/types";
 import { avatarUrl, formatCount, imgUrl } from "../lib/img";
 import { useLang } from "../lib/i18n";
 import { useState } from "react";
 
 type Props = {
-  note: Note;
+  note: NoteListItem;
   onOpen: (id: string) => void;
 };
 
